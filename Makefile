@@ -1,465 +1,266 @@
-# Kicau Mono Repo
-
-A full-stack bird sound identification application with NestJS backend, Python inference service, React frontend, and PostgreSQL database, all containerized with Docker.
-
-## 🏗️ Architecture
-
-- **React Frontend** (Port 5173) - Web interface built with Vite
-- **NestJS Backend** (Port 3000) - Web service API with Prisma ORM
-- **Python Inference Service** (Port 8000) - Machine learning inference service
-- **PostgreSQL** (Port 5432) - Database
-- **pgAdmin** (Port 8080) - Database administration (optional)
-
-## 📋 Prerequisites
-
-- [Docker](https://www.docker.com/products/docker-desktop/)
-- [Docker Compose](https://docs.docker.com/compose/install/) (included with Docker Desktop)
-- Make (for Unix/Linux/Mac) or use native Docker commands for Windows
-
-## 🚀 Quick Start
-
-### Option 1: Using Make (Unix/Linux/Mac)
-
-```bash
-# First-time setup (builds images, starts all services with pgAdmin, seeds database)
-make first-run
-
-# Start all services
-make up
-
-# Start all services with pgAdmin
-make up-admin
-
-# Stop all services
-make down
-
-# View all available commands
-make help
-```
-
-### Option 2: Native Docker Commands (Windows/All Platforms)
-
-#### First-Time Setup
-```bash
-# Build all services
-docker-compose build
-
-# Start all services with pgAdmin
-docker-compose --profile admin up -d
-
-# Run database migrations
-docker-compose exec nestjs-backend npx prisma migrate deploy
-
-# Seed the database
-docker-compose exec nestjs-backend npm run prisma:seed
-```
-
-#### Daily Development Commands
-```bash
-# Start all services (without pgAdmin)
-docker-compose up -d
-
-# Start all services with pgAdmin
-docker-compose --profile admin up -d
-
-# Stop all services
-docker-compose down
-
-# View service status
-docker-compose ps
-
-# View logs (all services)
-docker-compose logs -f
-
-# View logs (specific service)
-docker-compose logs -f nestjs-backend
-docker-compose logs -f python-backend
-docker-compose logs -f frontend
-docker-compose logs -f postgres
-```
-
-## 🔧 Development Commands
-
-### Service Management
-
-#### Using Make
-```bash
-# Start individual services
-make nestjs-up      # NestJS + PostgreSQL
-make python-up      # Python + PostgreSQL
-make frontend-up    # Frontend + all backends
-make postgres-up    # PostgreSQL only
-make pgadmin-up     # PostgreSQL + pgAdmin
-
-# Restart services
-make restart        # All services
-make restart-admin  # All services with pgAdmin
-
-# Build services
-make build          # Build all
-make build-nocache  # Build without cache
-make rebuild        # Stop, build, start
-make rebuild-admin  # Stop, build, start with pgAdmin
-```
-
-#### Using Docker Commands
-```bash
-# Start individual services
-docker-compose up -d postgres nestjs-backend
-docker-compose up -d postgres python-backend
-docker-compose up -d postgres nestjs-backend python-backend frontend
-docker-compose up -d postgres
-docker-compose --profile admin up -d postgres pgadmin
-
-# Restart services
-docker-compose restart
-
-# Build services
-docker-compose build
-docker-compose build --no-cache
-```
-
-### Database Operations
-
-#### Using Make
-```bash
-make db-migrate     # Run migrations
-make db-seed        # Seed database
-make db-studio      # Open Prisma Studio
-make db-reset       # Reset database (WARNING: deletes data)
-make db-backup      # Create backup
-make db-restore BACKUP_FILE=filename # Restore from backup
-```
-
-#### Using Docker Commands
-```bash
-# Run migrations
-docker-compose exec nestjs-backend npx prisma migrate deploy
-
-# Seed database
-docker-compose exec nestjs-backend npm run prisma:seed
-
-# Open Prisma Studio
-docker-compose exec nestjs-backend npx prisma studio
-
-# Reset database (WARNING: deletes all data)
-docker-compose exec nestjs-backend npx prisma migrate reset --force
-
-# Create database backup
-mkdir -p backups
-docker-compose exec postgres pg_dump -U kicau_user -d kicau_db > backups/backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Restore database from backup
-docker-compose exec -T postgres psql -U kicau_user -d kicau_db < backups/your_backup_file.sql
-```
-
-### Shell Access
-
-#### Using Make
-```bash
-make shell-nestjs   # Access NestJS container
-make shell-python   # Access Python container
-make shell-frontend # Access Frontend container
-make shell-postgres # Access PostgreSQL
-```
-
-#### Using Docker Commands
-```bash
-# Access container shells
-docker-compose exec nestjs-backend sh
-docker-compose exec python-backend bash
-docker-compose exec frontend sh
-docker-compose exec postgres psql -U kicau_user -d kicau_db
-```
-
-### Development & Testing
-
-#### Using Make
-```bash
-# Linting and Testing
-make lint-nestjs        # Lint NestJS code
-make test-nestjs        # Run NestJS tests
-make test-python        # Run Python tests
-
-# Install Dependencies
-make install-nestjs     # Install NestJS dependencies
-make install-python     # Install Python dependencies
-make install-frontend   # Install Frontend dependencies
-```
-
-#### Using Docker Commands
-```bash
-# NestJS linting and testing
-docker-compose exec nestjs-backend npm run lint
-docker-compose exec nestjs-backend npm run test
-
-# Python testing
-docker-compose exec python-backend python -m pytest
-
-# Install dependencies
-docker-compose exec nestjs-backend npm install
-docker-compose exec python-backend pip install -r requirements.txt
-docker-compose exec frontend npm install
-```
-
-### Monitoring & Logs
-
-#### Using Make
-```bash
-# View logs
-make logs           # All services
-make logs-nestjs    # NestJS service only
-make logs-python    # Python service only
-make logs-frontend  # Frontend service only
-make logs-postgres  # PostgreSQL service only
-make logs-pgadmin   # pgAdmin service only
-
-# Check status
-make status         # Show service status
-```
-
-#### Using Docker Commands
-```bash
-# View logs
-docker-compose logs -f                    # All services
-docker-compose logs -f nestjs-backend     # NestJS service
-docker-compose logs -f python-backend     # Python service
-docker-compose logs -f frontend           # Frontend service
-docker-compose logs -f postgres           # PostgreSQL service
-docker-compose logs -f pgadmin           # pgAdmin service
-
-# Check service status
-docker-compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
-```
-
-### Health Checks
-
-#### Using Make
-```bash
-make health         # Check all services
-make health-nestjs  # Check NestJS health endpoint
-make health-python  # Check Python health endpoint
-make health-frontend # Check Frontend availability
-```
-
-#### Using Docker Commands
-```bash
-# Check service status
-docker-compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
-
-# Health check endpoints (requires curl or use browser)
-curl http://localhost:3000/health
-curl http://localhost:8000/health
-curl http://localhost:5173
-```
-
-## 🧹 Cleanup Commands
-
-#### Using Make
-```bash
-make clean          # Remove containers and volumes
-make clean-images   # Remove built images
-make clean-all      # Complete cleanup (WARNING: removes everything)
-```
-
-#### Using Docker Commands
-```bash
-# Basic cleanup
-docker-compose down -v --remove-orphans
-
-# Remove images
-docker-compose down --rmi all
-
-# Complete cleanup (WARNING: removes everything)
-docker-compose down -v --rmi all --remove-orphans
-docker system prune -f
-```
-
-## 🌐 Service URLs
-
-After starting the services, you can access:
-
-- **React Frontend**: http://localhost:5173
-- **NestJS API**: http://localhost:3000
-- **Python Inference API**: http://localhost:8000
-- **pgAdmin**: http://localhost:8080 (when using admin profile)
-- **PostgreSQL**: localhost:5432
-
-### pgAdmin Login (if using admin profile)
-- **Email**: admin@kicau.com
-- **Password**: admin123
-
-### Database Connection Details
-- **Host**: postgres (internal) / localhost (external)
-- **Port**: 5432
-- **Database**: kicau_db
-- **Username**: kicau_user
-- **Password**: kicau_password
-
-## 📁 Project Structure
-
-```
-.
-├── Backend/
-│   ├── inference-service/     # Python ML inference service
-│   │   ├── Dockerfile
-│   │   ├── server.py
-│   │   ├── kicau_model.h5     # Trained ML model
-│   │   └── requirements.txt
-│   └── web-service/           # NestJS backend API
-│       ├── Dockerfile
-│       ├── prisma/            # Database schema & migrations
-│       ├── src/               # NestJS source code
-│       │   ├── birds/         # Birds module
-│       │   └── ...
-│       └── package.json
-├── Frontend/                  # React frontend
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   ├── src/
-│   │   ├── components/        # React components
-│   │   ├── pages/            # Page components
-│   │   ├── services/         # API services
-│   │   ├── store/            # State management
-│   │   └── ...
-│   └── package.json
-├── MachineLearning/          # ML development & training
-│   ├── app.py
-│   ├── notebook.ipynb        # Training notebook
-│   ├── kicau_model.h5        # Model file
-│   └── requirements.txt
-├── backups/                  # Database backups
-├── docker-compose.yml        # Docker services configuration
-├── docker-compose.prod.yml   # Production configuration
-├── Makefile                 # Development commands
-└── README.md               # This file
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Port already in use**
-   ```bash
-   # Check what's using the port
-   netstat -ano | findstr :5173  # Windows (Frontend)
-   netstat -ano | findstr :3000  # Windows (NestJS)
-   netstat -ano | findstr :8000  # Windows (Python)
-   lsof -i :5173                 # Mac/Linux (Frontend)
-   lsof -i :3000                 # Mac/Linux (NestJS)
-   lsof -i :8000                 # Mac/Linux (Python)
-   ```
-
-2. **Docker daemon not running**
-   - Make sure Docker Desktop is running
-   - On Windows: Check system tray for Docker icon
-
-3. **Permission denied (Linux/Mac)**
-   ```bash
-   sudo chmod +x Makefile
-   # or use docker commands directly
-   ```
-
-4. **Database connection issues**
-   ```bash
-   # Restart PostgreSQL service
-   docker-compose restart postgres
-
-   # Check if migrations are applied
-   make db-migrate
-   ```
-
-5. **Frontend not loading**
-   ```bash
-   # Check if all backend services are running
-   make status
-
-   # Restart frontend service
-   docker-compose restart frontend
-   ```
-
-6. **ML model not found**
-   - Ensure `kicau_model.h5` exists in both `Backend/inference-service/` and `MachineLearning/` directories
-   - Check Python service logs: `make logs-python`
-
-### Logs and Debugging
-
-```bash
-# View logs for troubleshooting
-make logs-nestjs      # NestJS backend
-make logs-python      # Python inference service
-make logs-frontend    # React frontend
-make logs-postgres    # PostgreSQL database
-
-# Follow logs in real-time
-make logs             # All services
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test using the provided commands
-5. Submit a pull request
-
-## 📝 Notes for Windows Users
-
-- Use PowerShell or Command Prompt for Docker commands
-- If you have WSL2, you can use the Make commands there
-- Make sure Docker Desktop is configured to use WSL2 backend for better performance
-- Use `docker-compose` instead of `make` commands if Make is not available
-
-## 🔄 Development Workflow
-
-1. **Start development environment**:
-   ```bash
-   make dev  # or make up
-   ```
-
-2. **Make code changes** in:
-   - `Frontend/src/` for React frontend
-   - `Backend/web-service/src/` for NestJS API
-   - `Backend/inference-service/` for Python ML service
-   - `MachineLearning/` for ML model development
-
-3. **View logs** to debug:
-   ```bash
-   make logs  # All services
-   make logs-frontend  # Frontend only
-   make logs-nestjs    # NestJS only
-   make logs-python    # Python only
-   ```
-
-4. **Database operations**:
-   ```bash
-   make db-migrate  # Apply schema changes
-   make db-seed     # Seed with sample data
-   make db-studio   # Visual database editor
-   ```
-
-5. **Restart services** if needed:
-   ```bash
-   make restart  # All services
-   ```
-
-## 🚀 Production Deployment
-
-For production deployment, use the production Docker Compose file:
-
-```bash
-# Production build and start
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# Production with custom environment
-docker-compose -f docker-compose.prod.yml --env-file .env.production up -d
-```
-
-## 📊 Features
-
-- **Bird Sound Identification**: Upload audio files or record sounds to identify bird species
-- **Birdpedia**: Browse and learn about different bird species
-- **History**: Track your identification history
-- **RESTful API**: Complete backend API for bird data and identification
-- **Machine Learning**: TensorFlow/Keras model for audio classification
-- **Responsive Design**: Mobile-friendly React frontend
+# Makefile for Kicau Mono Repo
+
+# default target
+.DEFAULT_GOAL := help
+
+COMPOSE_FILE := docker-compose.yml
+ADMIN_PROFILE := --profile admin
+NESTJS_DIR := Backend/web-service
+PYTHON_DIR := Backend/inference-service
+FRONTEND_DIR := Frontend
+
+.PHONY: help
+help:
+	@echo "Kicau Mono Repo - Available Commands"
+	@echo "=================================="
+	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  %-20s %s\n", $$1, $$2 } /^##@/ { printf "\n%s\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Service Management
+.PHONY: up
+up: ## Start all services
+	@echo "Starting all services..."
+	docker-compose up -d
+	@echo "Services started successfully!"
+	@echo "NestJS Backend: http://localhost:3000"
+	@echo "Python Backend: http://localhost:8000"
+	@echo "React Frontend: http://localhost:5173"
+	@echo "PostgreSQL: localhost:5432"
+
+.PHONY: up-admin
+up-admin: ## Start all services with pgAdmin
+	@echo "Starting all services with pgAdmin..."
+	docker-compose $(ADMIN_PROFILE) up -d
+	@echo "Services started successfully!"
+	@echo "NestJS Backend: http://localhost:3000"
+	@echo "Python Backend: http://localhost:8000"
+	@echo "React Frontend: http://localhost:5173"
+	@echo "PostgreSQL: localhost:5432"
+	@echo "pgAdmin: http://localhost:8080"
+
+.PHONY: down
+down: ## Stop all services
+	@echo "Stopping all services..."
+	docker-compose down
+	@echo "Services stopped successfully!"
+
+.PHONY: restart
+restart: down up ## Restart all services
+
+.PHONY: restart-admin
+restart-admin: down up-admin ## Restart all services with pgAdmin
+
+.PHONY: build
+build: ## Build all services
+	@echo "Building all services..."
+	docker-compose build
+	@echo "Build completed!"
+
+.PHONY: build-nocache
+build-nocache: ## Build all services without cache
+	@echo "Building all services without cache..."
+	docker-compose build --no-cache
+	@echo "Build completed!"
+
+.PHONY: rebuild
+rebuild: down build up ## Stop, build, and start all services
+
+.PHONY: rebuild-admin
+rebuild-admin: down build up-admin ## Stop, build, and start all services with pgAdmin
+
+##@ Individual Services
+.PHONY: nestjs-up
+nestjs-up: ## Start NestJS service with PostgreSQL
+	@echo "Starting NestJS service..."
+	docker-compose up -d postgres nestjs-backend
+
+.PHONY: python-up
+python-up: ## Start Python service with PostgreSQL
+	@echo "Starting Python service..."
+	docker-compose up -d postgres python-backend
+
+.PHONY: frontend-up
+frontend-up: ## Start Frontend service with backends
+	@echo "Starting Frontend service..."
+	docker-compose up -d postgres nestjs-backend python-backend frontend
+
+.PHONY: postgres-up
+postgres-up: ## Start PostgreSQL service only
+	@echo "Starting PostgreSQL service..."
+	docker-compose up -d postgres
+
+.PHONY: pgadmin-up
+pgadmin-up: ## Start PostgreSQL and pgAdmin
+	@echo "Starting PostgreSQL and pgAdmin..."
+	docker-compose $(ADMIN_PROFILE) up -d postgres pgadmin
+
+##@ Monitoring
+.PHONY: logs
+logs: ## View logs from all services
+	docker-compose logs -f
+
+.PHONY: logs-nestjs
+logs-nestjs: ## View NestJS service logs
+	docker-compose logs -f nestjs-backend
+
+.PHONY: logs-python
+logs-python: ## View Python service logs
+	docker-compose logs -f python-backend
+
+.PHONY: logs-frontend
+logs-frontend: ## View Frontend service logs
+	docker-compose logs -f frontend
+
+.PHONY: logs-postgres
+logs-postgres: ## View PostgreSQL service logs
+	docker-compose logs -f postgres
+
+.PHONY: logs-pgadmin
+logs-pgadmin: ## View pgAdmin service logs
+	docker-compose logs -f pgadmin
+
+.PHONY: status
+status: ## Show service status
+	@echo "Service Status:"
+	docker-compose ps
+
+##@ Database Operations
+.PHONY: db-migrate
+db-migrate: ## Run database migrations
+	@echo "Running database migrations..."
+	docker-compose exec nestjs-backend npx prisma migrate deploy
+
+.PHONY: db-seed
+db-seed: ## Seed database with initial data
+	@echo "Seeding database..."
+	docker-compose exec nestjs-backend npm run prisma:seed
+
+.PHONY: db-studio
+db-studio: ## Open Prisma Studio
+	@echo "Opening Prisma Studio..."
+	docker-compose exec nestjs-backend npx prisma studio
+
+.PHONY: db-reset
+db-reset: ## Reset database (WARNING: deletes all data)
+	@echo "WARNING: This will delete all database data!"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
+	docker-compose exec nestjs-backend npx prisma migrate reset --force
+
+.PHONY: db-backup
+db-backup: ## Create database backup
+	@echo "Creating database backup..."
+	@mkdir -p backups
+	docker-compose exec postgres pg_dump -U kicau_user -d kicau_db > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo "Backup created in backups/ directory"
+
+.PHONY: db-restore
+db-restore: ## Restore database from backup (specify BACKUP_FILE=filename)
+	@if [ -z "$(BACKUP_FILE)" ]; then echo "Please specify BACKUP_FILE=filename"; exit 1; fi
+	@echo "Restoring database from $(BACKUP_FILE)..."
+	docker-compose exec -T postgres psql -U kicau_user -d kicau_db < backups/$(BACKUP_FILE)
+	@echo "Database restored successfully!"
+
+##@ Shell Access
+.PHONY: shell-nestjs
+shell-nestjs: ## Access NestJS container shell
+	docker-compose exec nestjs-backend sh
+
+.PHONY: shell-python
+shell-python: ## Access Python container shell
+	docker-compose exec python-backend bash
+
+.PHONY: shell-frontend
+shell-frontend: ## Access Frontend container shell
+	docker-compose exec frontend sh
+
+.PHONY: shell-postgres
+shell-postgres: ## Access PostgreSQL shell
+	docker-compose exec postgres psql -U kicau_user -d kicau_db
+
+##@ Development
+.PHONY: lint-nestjs
+lint-nestjs: ## Run NestJS linting
+	@echo "Running NestJS linting..."
+	docker-compose exec nestjs-backend npm run lint
+
+.PHONY: test-nestjs
+test-nestjs: ## Run NestJS tests
+	@echo "Running NestJS tests..."
+	docker-compose exec nestjs-backend npm run test
+
+.PHONY: test-python
+test-python: ## Run Python tests
+	@echo "Running Python tests..."
+	docker-compose exec python-backend python -m pytest
+
+.PHONY: install-nestjs
+install-nestjs: ## Install NestJS dependencies
+	@echo "Installing NestJS dependencies..."
+	docker-compose exec nestjs-backend npm install
+
+.PHONY: install-python
+install-python: ## Install Python dependencies
+	@echo "Installing Python dependencies..."
+	docker-compose exec python-backend pip install -r requirements.txt
+
+.PHONY: install-frontend
+install-frontend: ## Install Frontend dependencies
+	@echo "Installing Frontend dependencies..."
+	docker-compose exec frontend npm install
+
+##@ Cleanup
+.PHONY: clean
+clean: ## Clean up containers and volumes
+	@echo "Cleaning up containers and volumes..."
+	docker-compose down -v --remove-orphans
+	@echo "Cleanup completed!"
+
+.PHONY: clean-images
+clean-images: ## Remove built images
+	@echo "Removing built images..."
+	docker-compose down --rmi all
+	@echo "Images removed!"
+
+.PHONY: clean-all
+clean-all: ## Complete cleanup (WARNING: removes everything)
+	@echo "WARNING: This will remove all containers, volumes, and images!"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
+	docker-compose down -v --rmi all --remove-orphans
+	docker system prune -f
+	@echo "Complete cleanup finished!"
+
+##@ Health Checks
+.PHONY: health
+health: ## Check all services health
+	@echo "Checking service health..."
+	@docker-compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+.PHONY: health-nestjs
+health-nestjs: ## Check NestJS health endpoint
+	@echo "Checking NestJS health..."
+	@curl -f http://localhost:3000/health || echo "NestJS service is not healthy"
+
+.PHONY: health-python
+health-python: ## Check Python health endpoint
+	@echo "Checking Python health..."
+	@curl -f http://localhost:8000/health || echo "Python service is not healthy"
+
+.PHONY: health-frontend
+health-frontend: ## Check Frontend availability
+	@echo "Checking Frontend availability..."
+	@curl -f http://localhost:5173 || echo "Frontend service is not available"
+
+##@ Quick Start
+.PHONY: first-run
+first-run: build up-admin db-seed ## First-time setup (build, start with pgAdmin, seed database)
+	@echo "First-time setup completed!"
+	@echo "Your services are now running:"
+	@echo "  - NestJS Backend: http://localhost:3000"
+	@echo "  - Python Backend: http://localhost:8000"
+	@echo "  - React Frontend: http://localhost:5173"
+	@echo "  - pgAdmin: http://localhost:8080"
+	@echo "  - PostgreSQL: localhost:5432"
+
+.PHONY: dev
+dev: up ## Start development environment
+	@echo "Development environment started!"
+	@echo "Use 'make logs' to see all logs"
