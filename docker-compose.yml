@@ -22,8 +22,9 @@ services:
 
   nestjs-backend:
     build:
-      context: ./web-service
+      context: ./Backend/web-service
       dockerfile: Dockerfile
+      target: development
     container_name: kicau-nestjs
     depends_on:
       postgres:
@@ -38,12 +39,14 @@ services:
       - kicau-network
     restart: unless-stopped
     volumes:
-      - ./web-service:/app
+      - ./Backend/web-service:/app
+      - /app/node_modules
 
   python-backend:
     build:
-      context: ./inference-service
+      context: ./Backend/inference-service
       dockerfile: Dockerfile
+      target: development
     container_name: kicau-python
     environment:
       - DATABASE_URL=postgresql://kicau_user:kicau_password@postgres:5432/kicau_db
@@ -54,10 +57,28 @@ services:
       - kicau-network
     restart: unless-stopped
     volumes:
-      - ./inference-service:/app
+      - ./Backend/inference-service:/app
     depends_on:
       postgres:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: kicau-frontend
+    ports:
+      - '5173:5173'
+    networks:
+      - kicau-network
+    restart: unless-stopped
+    depends_on:
+      - nestjs-backend
+      - python-backend
+    environment:
+      - VITE_API_URL=http://localhost:3000
+      - VITE_PYTHON_API_URL=http://localhost:8000
 
   pgadmin:
     image: dpage/pgadmin4:latest

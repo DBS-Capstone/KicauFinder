@@ -5,8 +5,9 @@
 
 COMPOSE_FILE := docker-compose.yml
 ADMIN_PROFILE := --profile admin
-NESTJS_DIR := web-service
-PYTHON_DIR := inference-service
+NESTJS_DIR := Backend/web-service
+PYTHON_DIR := Backend/inference-service
+FRONTEND_DIR := Frontend
 
 .PHONY: help
 help:
@@ -22,6 +23,7 @@ up: ## Start all services
 	@echo "Services started successfully!"
 	@echo "NestJS Backend: http://localhost:3000"
 	@echo "Python Backend: http://localhost:8000"
+	@echo "React Frontend: http://localhost:5173"
 	@echo "PostgreSQL: localhost:5432"
 
 .PHONY: up-admin
@@ -31,6 +33,7 @@ up-admin: ## Start all services with pgAdmin
 	@echo "Services started successfully!"
 	@echo "NestJS Backend: http://localhost:3000"
 	@echo "Python Backend: http://localhost:8000"
+	@echo "React Frontend: http://localhost:5173"
 	@echo "PostgreSQL: localhost:5432"
 	@echo "pgAdmin: http://localhost:8080"
 
@@ -75,6 +78,11 @@ python-up: ## Start Python service with PostgreSQL
 	@echo "Starting Python service..."
 	docker-compose up -d postgres python-backend
 
+.PHONY: frontend-up
+frontend-up: ## Start Frontend service with backends
+	@echo "Starting Frontend service..."
+	docker-compose up -d postgres nestjs-backend python-backend frontend
+
 .PHONY: postgres-up
 postgres-up: ## Start PostgreSQL service only
 	@echo "Starting PostgreSQL service..."
@@ -97,6 +105,10 @@ logs-nestjs: ## View NestJS service logs
 .PHONY: logs-python
 logs-python: ## View Python service logs
 	docker-compose logs -f python-backend
+
+.PHONY: logs-frontend
+logs-frontend: ## View Frontend service logs
+	docker-compose logs -f frontend
 
 .PHONY: logs-postgres
 logs-postgres: ## View PostgreSQL service logs
@@ -130,7 +142,7 @@ db-studio: ## Open Prisma Studio
 .PHONY: db-reset
 db-reset: ## Reset database (WARNING: deletes all data)
 	@echo "WARNING: This will delete all database data!"
-	@read -p "Are you sure? (y/N): " confirm && [ "$confirm" = "y" ]
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
 	docker-compose exec nestjs-backend npx prisma migrate reset --force
 
 .PHONY: db-backup
@@ -140,6 +152,13 @@ db-backup: ## Create database backup
 	docker-compose exec postgres pg_dump -U kicau_user -d kicau_db > backups/backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "Backup created in backups/ directory"
 
+.PHONY: db-restore
+db-restore: ## Restore database from backup (specify BACKUP_FILE=filename)
+	@if [ -z "$(BACKUP_FILE)" ]; then echo "Please specify BACKUP_FILE=filename"; exit 1; fi
+	@echo "Restoring database from $(BACKUP_FILE)..."
+	docker-compose exec -T postgres psql -U kicau_user -d kicau_db < backups/$(BACKUP_FILE)
+	@echo "Database restored successfully!"
+
 ##@ Shell Access
 .PHONY: shell-nestjs
 shell-nestjs: ## Access NestJS container shell
@@ -148,6 +167,10 @@ shell-nestjs: ## Access NestJS container shell
 .PHONY: shell-python
 shell-python: ## Access Python container shell
 	docker-compose exec python-backend bash
+
+.PHONY: shell-frontend
+shell-frontend: ## Access Frontend container shell
+	docker-compose exec frontend sh
 
 .PHONY: shell-postgres
 shell-postgres: ## Access PostgreSQL shell
@@ -159,6 +182,16 @@ lint-nestjs: ## Run NestJS linting
 	@echo "Running NestJS linting..."
 	docker-compose exec nestjs-backend npm run lint
 
+.PHONY: test-nestjs
+test-nestjs: ## Run NestJS tests
+	@echo "Running NestJS tests..."
+	docker-compose exec nestjs-backend npm run test
+
+.PHONY: test-python
+test-python: ## Run Python tests
+	@echo "Running Python tests..."
+	docker-compose exec python-backend python -m pytest
+
 .PHONY: install-nestjs
 install-nestjs: ## Install NestJS dependencies
 	@echo "Installing NestJS dependencies..."
@@ -168,6 +201,11 @@ install-nestjs: ## Install NestJS dependencies
 install-python: ## Install Python dependencies
 	@echo "Installing Python dependencies..."
 	docker-compose exec python-backend pip install -r requirements.txt
+
+.PHONY: install-frontend
+install-frontend: ## Install Frontend dependencies
+	@echo "Installing Frontend dependencies..."
+	docker-compose exec frontend npm install
 
 ##@ Cleanup
 .PHONY: clean
@@ -185,7 +223,7 @@ clean-images: ## Remove built images
 .PHONY: clean-all
 clean-all: ## Complete cleanup (WARNING: removes everything)
 	@echo "WARNING: This will remove all containers, volumes, and images!"
-	@read -p "Are you sure? (y/N): " confirm && [ "$confirm" = "y" ]
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
 	docker-compose down -v --rmi all --remove-orphans
 	docker system prune -f
 	@echo "Complete cleanup finished!"
@@ -206,6 +244,11 @@ health-python: ## Check Python health endpoint
 	@echo "Checking Python health..."
 	@curl -f http://localhost:8000/health || echo "Python service is not healthy"
 
+.PHONY: health-frontend
+health-frontend: ## Check Frontend availability
+	@echo "Checking Frontend availability..."
+	@curl -f http://localhost:5173 || echo "Frontend service is not available"
+
 ##@ Quick Start
 .PHONY: first-run
 first-run: build up-admin db-seed ## First-time setup (build, start with pgAdmin, seed database)
@@ -213,6 +256,7 @@ first-run: build up-admin db-seed ## First-time setup (build, start with pgAdmin
 	@echo "Your services are now running:"
 	@echo "  - NestJS Backend: http://localhost:3000"
 	@echo "  - Python Backend: http://localhost:8000"
+	@echo "  - React Frontend: http://localhost:5173"
 	@echo "  - pgAdmin: http://localhost:8080"
 	@echo "  - PostgreSQL: localhost:5432"
 

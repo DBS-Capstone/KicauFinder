@@ -161,7 +161,7 @@ export class BirdsController {
                     headers: {
                         ...formData.getHeaders(),
                     },
-                    timeout: 30000, // 30 second timeout
+                    timeout: 120000, // 30 second timeout
                 },
             );
 

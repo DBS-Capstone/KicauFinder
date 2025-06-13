@@ -11,9 +11,6 @@ import ResultsPage from './pages/ResultsPage';
 import BirdpediaPage from './pages/BirdpediaPage';
 import BirdDetailPage from './pages/BirdDetailPage';
 import AboutPage from './pages/AboutPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import './index.css';
 
@@ -59,9 +56,6 @@ function App() {
               <Route path="birdpedia" element={<BirdpediaPage />} />
               <Route path="birdpedia/:birdId" element={<BirdDetailPage />} />
               <Route path="about" element={<AboutPage />} />
-              <Route path="login" element={<LoginPage />} />
-              <Route path="register" element={<RegisterPage />} />
-              <Route path="profile" element={<ProfilePage />} />
               <Route path="history" element={<HistoryPage />} />
             </Route>
           </Routes>
