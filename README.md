@@ -1,1 +1,1 @@
-# KicauFinder
+# Kicau Finder
