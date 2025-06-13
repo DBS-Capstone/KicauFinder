@@ -10,8 +10,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
-    ports:
-      - '5432:5432'
     networks:
       - kicau-network
     healthcheck:
@@ -32,15 +30,10 @@ services:
     environment:
       - DATABASE_URL=postgresql://kicau_user:kicau_password@postgres:5432/kicau_db?schema=public
       - PYTHON_BACKEND_URL=http://python-backend:8000
-      - NODE_ENV=development
-    ports:
-      - '3000:3000'
+      - NODE_ENV=production
     networks:
       - kicau-network
     restart: unless-stopped
-    volumes:
-      - ./Backend/web-service:/app
-      - /app/node_modules
 
   python-backend:
     build:
@@ -50,14 +43,10 @@ services:
     container_name: kicau-python
     environment:
       - DATABASE_URL=postgresql://kicau_user:kicau_password@postgres:5432/kicau_db
-      - ENVIRONMENT=development
-    ports:
-      - '8000:8000'
+      - ENVIRONMENT=production
     networks:
       - kicau-network
     restart: unless-stopped
-    volumes:
-      - ./Backend/inference-service:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,8 +57,6 @@ services:
       dockerfile: Dockerfile
       target: production
     container_name: kicau-frontend
-    ports:
-      - '5173:80'
     networks:
       - kicau-network
     restart: unless-stopped
@@ -77,8 +64,23 @@ services:
       - nestjs-backend
       - python-backend
     environment:
-      - VITE_API_URL=http://localhost:3000
-      - VITE_PYTHON_API_URL=http://localhost:8000
+      - VITE_API_URL=/api
+
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: kicau-nginx-proxy
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+      - nestjs-backend
+      - python-backend
+    networks:
+      - kicau-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
