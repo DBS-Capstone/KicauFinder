@@ -1,35 +1,170 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  FiArrowLeft, 
-  FiMapPin, 
-  FiVolumeX, 
-  FiHeart, 
-  FiEye, 
+import {
+  FiArrowLeft,
+  FiMapPin,
+  FiVolumeX,
+  FiHeart,
+  FiEye,
   FiStar,
   FiInfo,
   FiHome,
   FiShare2
 } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
 import { realBirdData, getConservationStatusColor, formatSize } from '../data/realBirdData';
 import EnhancedBirdCard from '../components/birdpedia/EnhancedBirdCard';
+import birdService from '../services/birdService';
 
 const BirdDetailPage = () => {
   const { birdId } = useParams();
   const navigate = useNavigate();
-  
-  const bird = realBirdData.find(b => b.id === parseInt(birdId));
-  
-  // Get other birds for recommendations
-  const otherBirds = realBirdData
-    .filter(b => b.id !== bird?.id)
-    .slice(0, 4);
+
+  const [bird, setBird] = useState(null);
+  const [otherBirds, setOtherBirds] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasApiError, setHasApiError] = useState(false);
+
+  const normalizeBirdData = (birdData) => {
+    return {
+      ...birdData,
+      image_url: birdData.foto_voice && birdData.foto_voice.length > 0
+        ? birdData.foto_voice[0].foto_url
+        : birdData.image_url || birdData.image,
+      image: birdData.foto_voice && birdData.foto_voice.length > 0
+        ? birdData.foto_voice[0].foto_url
+        : birdData.image_url || birdData.image,
+      length: birdData.size_length_cm,
+      weight: birdData.size_weight_g,
+      wingspan: birdData.size_wingspan_cm,
+    };
+  };
+
+  const fetchBirdDetails = async () => {
+    setIsLoading(true);
+    try {
+      const response = await birdService.getBirdDetails(birdId);
+
+      let birdData;
+      if (response.bird) {
+        birdData = response.bird;
+      } else if (response.data) {
+        birdData = response.data;
+      } else {
+        birdData = response;
+      }
+
+      const normalizedBird = normalizeBirdData(birdData);
+      setBird(normalizedBird);
+      setHasApiError(false);
+    } catch (error) {
+      console.error('Error fetching bird details:', error);
+
+      const localBird = realBirdData.find(b => b.id === parseInt(birdId) || b.id === birdId);
+      if (localBird) {
+        setBird(localBird);
+        setHasApiError(true);
+        toast.error('Using local data - API unavailable');
+      } else {
+        setBird(null);
+        setHasApiError(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchOtherBirds = async () => {
+    try {
+      const response = await birdService.getAllBirds({ limit: 4 });
+
+      let birdsData;
+      if (response.birds) {
+        birdsData = response.birds;
+      } else if (Array.isArray(response.data)) {
+        birdsData = response.data;
+      } else if (Array.isArray(response)) {
+        birdsData = response;
+      } else {
+        birdsData = [];
+      }
+
+      const normalizedBirds = birdsData.map(normalizeBirdData);
+      const filteredBirds = normalizedBirds
+        .filter(b => b.id !== bird?.id && b.id !== parseInt(birdId) && b.id !== birdId)
+        .slice(0, 4);
+
+      setOtherBirds(filteredBirds);
+    } catch (error) {
+      console.error('Error fetching other birds:', error);
+
+      const localOtherBirds = realBirdData
+        .filter(b => b.id !== bird?.id && b.id !== parseInt(birdId))
+        .slice(0, 4);
+
+      setOtherBirds(localOtherBirds);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    if (birdId) {
+      fetchBirdDetails();
+    }
+  }, [birdId]);
+
+  useEffect(() => {
+    if (bird) {
+      fetchOtherBirds();
+    }
+  }, [bird]);
+
+  const handleShare = async () => {
+    if (!bird) return;
+
+    const shareData = {
+      title: `${bird.common_name} - Kicau Finder`,
+      text: `Pelajari tentang ${bird.common_name} (${bird.scientific_name}) di Kicau Finder!`,
+      url: window.location.href
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success('Link berhasil disalin ke clipboard!');
+      } catch (err) {
+        console.log('Clipboard error:', err);
+        toast.error('Gagal menyalin link');
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-ui-bg flex items-center justify-center">
+        <motion.div
+          className="text-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-sage mb-4"></div>
+          <p className="text-text-secondary">Memuat detail burung...</p>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (!bird) {
     return (
       <div className="min-h-screen bg-ui-bg flex items-center justify-center">
-        <motion.div 
+        <motion.div
           className="text-center max-w-md"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -53,26 +188,6 @@ const BirdDetailPage = () => {
     );
   }
 
-  const handleShare = async () => {
-    const shareData = {
-      title: `${bird.common_name} - Kicau Finder`,
-      text: `Pelajari tentang ${bird.common_name} (${bird.scientific_name}) di Kicau Finder!`,
-      url: window.location.href
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        console.log('Error sharing:', err);
-      }
-    } else {
-      // Fallback to clipboard
-      navigator.clipboard.writeText(window.location.href);
-      alert('Link berhasil disalin ke clipboard!');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-ui-bg">
       {/* Header with Back Button */}
@@ -86,14 +201,21 @@ const BirdDetailPage = () => {
               <FiArrowLeft className="w-5 h-5 mr-2" />
               Kembali ke Birdpedia
             </Link>
-            
-            <button
-              onClick={handleShare}
-              className="inline-flex items-center px-4 py-2 bg-brand-sage text-white rounded-lg hover:bg-brand-forest transition-colors"
-            >
-              <FiShare2 className="w-4 h-4 mr-2" />
-              Bagikan
-            </button>
+
+            <div className="flex items-center gap-4">
+              {hasApiError && (
+                <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                  Local Data
+                </span>
+              )}
+              <button
+                onClick={handleShare}
+                className="inline-flex items-center px-4 py-2 bg-brand-sage text-white rounded-lg hover:bg-brand-forest transition-colors"
+              >
+                <FiShare2 className="w-4 h-4 mr-2" />
+                Bagikan
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -102,7 +224,7 @@ const BirdDetailPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Bird Details */}
           <div className="lg:col-span-2">
-            <motion.div 
+            <motion.div
               className="bg-ui-surface rounded-2xl shadow-lg overflow-hidden border border-ui-border"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -111,7 +233,7 @@ const BirdDetailPage = () => {
               {/* Hero Image */}
               <div className="relative h-64 md:h-80">
                 <img
-                  src={bird.image_url}
+                  src={bird.image_url || bird.image}
                   alt={bird.common_name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -128,7 +250,7 @@ const BirdDetailPage = () => {
                   </p>
                   <div className="mt-2">
                     <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getConservationStatusColor(bird.conservation_status)}`}>
-                      {bird.conservation_status}
+                      {bird.conservation_status || 'Unknown'}
                     </span>
                   </div>
                 </div>
@@ -144,7 +266,7 @@ const BirdDetailPage = () => {
                         Panjang
                       </p>
                       <p className="text-lg font-bold text-green-800">
-                        {formatSize(bird.size_length_cm, 'cm')}
+                        {formatSize(bird.size_length_cm || bird.length, 'cm')}
                       </p>
                     </div>
                     <div className="bg-blue-50 rounded-lg p-4 text-center">
@@ -152,7 +274,7 @@ const BirdDetailPage = () => {
                         Berat
                       </p>
                       <p className="text-lg font-bold text-blue-800">
-                        {formatSize(bird.size_weight_g, 'g')}
+                        {formatSize(bird.size_weight_g || bird.weight, 'g')}
                       </p>
                     </div>
                     <div className="bg-purple-50 rounded-lg p-4 text-center">
@@ -160,7 +282,7 @@ const BirdDetailPage = () => {
                         Rentang Sayap
                       </p>
                       <p className="text-lg font-bold text-purple-800">
-                        {formatSize(bird.size_wingspan_cm, 'cm')}
+                        {formatSize(bird.size_wingspan_cm || bird.wingspan, 'cm')}
                       </p>
                     </div>
                     <div className="bg-orange-50 rounded-lg p-4 text-center">
@@ -168,7 +290,7 @@ const BirdDetailPage = () => {
                         Famili
                       </p>
                       <p className="text-sm font-bold text-orange-800">
-                        {bird.family}
+                        {bird.family || 'Unknown'}
                       </p>
                     </div>
                   </div>
@@ -251,6 +373,19 @@ const BirdDetailPage = () => {
                     </div>
                   )}
 
+                  {/* Migration Pattern Section */}
+                  {bird.migration_pattern && (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <FiMapPin className="w-5 h-5 text-brand-sage" />
+                        <h2 className="text-xl font-semibold text-text-primary">Pola Migrasi</h2>
+                      </div>
+                      <p className="text-text-secondary leading-relaxed">
+                        {bird.migration_pattern}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Cool Facts Section */}
                   {bird.cool_facts && Array.isArray(bird.cool_facts) && bird.cool_facts.length > 0 && (
                     <div className="space-y-3">
@@ -303,7 +438,7 @@ const BirdDetailPage = () => {
 
           {/* Right Column - Other Birds */}
           <div className="lg:col-span-1">
-            <motion.div 
+            <motion.div
               className="bg-ui-surface rounded-2xl shadow-lg p-6 border border-ui-border"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -312,18 +447,25 @@ const BirdDetailPage = () => {
               <h3 className="text-xl font-semibold text-text-primary mb-6">
                 Burung Lainnya
               </h3>
-              
+
               {otherBirds.length > 0 ? (
                 <div className="space-y-6">
                   {otherBirds.map((otherBird, index) => (
-                    <motion.div 
-                      key={otherBird.id} 
+                    <motion.div
+                      key={otherBird.id}
                       className="transform scale-90"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.4, delay: 0.3 + (index * 0.1) }}
                     >
-                      <EnhancedBirdCard bird={otherBird} />
+                      <EnhancedBirdCard
+                        bird={otherBird}
+                        onClick={() => {
+                          if (otherBird.id) {
+                            navigate(`/birdpedia/${otherBird.id}`);
+                          }
+                        }}
+                      />
                     </motion.div>
                   ))}
                 </div>

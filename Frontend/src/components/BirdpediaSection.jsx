@@ -5,7 +5,7 @@ import { FaSearch, FaFilter } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 import { realBirdData, getUniqueHabitats } from "../data/realBirdData";
 import EnhancedBirdCard from "./birdpedia/EnhancedBirdCard";
-import birdService from "../services/birdService";
+import BirdService from "../services/BirdService";
 
 const BirdpediaSection = () => {
   const { birdName } = useParams();
@@ -15,7 +15,8 @@ const BirdpediaSection = () => {
   const [habitatFilter, setHabitatFilter] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [birds, setBirds] = useState([]);
-  const [useApiData, setUseApiData] = useState(true); // Toggle between API and local data
+  const [useApiData, setUseApiData] = useState(true);
+  const [hasApiError, setHasApiError] = useState(false);
 
   // Get unique habitats for filter dropdown
   const habitats = getUniqueHabitats();
@@ -24,26 +25,49 @@ const BirdpediaSection = () => {
   const fetchBirds = async () => {
     setIsLoading(true);
     try {
-      const params = {};
+      let response;
 
-      // Add search parameters if available
-      if (searchTerm) {
-        params.search = searchTerm;
+      // Use search if there's a search term, otherwise get all birds
+      if (searchTerm.trim()) {
+        const filters = {};
+        if (habitatFilter) {
+          filters.habitat = habitatFilter;
+        }
+        response = await BirdService.searchBirds(searchTerm, filters);
+      } else if (habitatFilter) {
+        response = await BirdService.getBirdsByHabitat(habitatFilter);
+      } else {
+        const params = { limit: 50 }; // Add reasonable limit
+        response = await BirdService.getAllBirds(params);
       }
 
-      // Add habitat filter if selected
-      if (habitatFilter) {
-        params.habitat = habitatFilter;
+      // Handle different response structures
+      let birdsData;
+      if (response.birds) {
+        birdsData = response.birds;
+      } else if (Array.isArray(response.data)) {
+        birdsData = response.data;
+      } else if (Array.isArray(response)) {
+        birdsData = response;
+      } else {
+        birdsData = [];
       }
 
-      const response = await birdService.getAllBirds(params);
-      setBirds(response.data || response); // Handle different response structures
+      // Ensure each bird has a valid ID
+      const processedBirds = birdsData.map((bird, index) => ({
+        ...bird,
+        id: bird.id || bird._id || `bird-${index}` // Fallback ID generation
+      }));
+
+      setBirds(processedBirds);
+      setHasApiError(false); // Reset error state on successful fetch
 
     } catch (error) {
       console.error('Error fetching birds:', error);
-      toast.error(error.message || 'Failed to load birds');
+      toast.error(error.message || 'Failed to load birds from API, using local data');
 
       // Fallback to local data on API error
+      setHasApiError(true);
       setUseApiData(false);
       setBirds(realBirdData);
     } finally {
@@ -51,28 +75,37 @@ const BirdpediaSection = () => {
     }
   };
 
-  // Initial data load
+  // Initial data load - always try API first
   useEffect(() => {
-    if (useApiData) {
-      fetchBirds();
-    } else {
-      setBirds(realBirdData);
-    }
-  }, [useApiData]);
+    fetchBirds();
+  }, []); // Only run once on mount
 
-  // Debounced search effect
+  // Handle search and filter changes
   useEffect(() => {
-    if (!useApiData) return;
+    // Only make API calls if we're using API data and not in error state
+    if (!useApiData || hasApiError) return;
 
     const debounceTimer = setTimeout(() => {
       fetchBirds();
-    }, 500); // 500ms delay for search
+    }, 500);
 
     return () => clearTimeout(debounceTimer);
-  }, [searchTerm, habitatFilter, useApiData]);
+  }, [searchTerm, habitatFilter, useApiData, hasApiError]);
+
+  // Handle manual toggle of API data
+  useEffect(() => {
+    if (useApiData && !hasApiError) {
+      // User manually enabled API - try to fetch
+      fetchBirds();
+    } else if (!useApiData) {
+      // User manually disabled API - use local data
+      setBirds(realBirdData);
+      setHasApiError(false); // Reset error state
+    }
+  }, [useApiData]);
 
   // Filter birds (for local data or additional client-side filtering)
-  const filteredBirds = useApiData ? birds : birds.filter(
+  const filteredBirds = (useApiData && !hasApiError) ? birds : birds.filter(
     (bird) => {
       const matchesSearch = !searchTerm ||
         bird.common_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -100,47 +133,59 @@ const BirdpediaSection = () => {
     visible: { y: 0, opacity: 1 }
   };
 
-  // If accessing specific bird by name (legacy route)
-  if (birdName) {
-    const selectedBird = birds.find(
-      (bird) => bird.common_name?.toLowerCase().replace(/\s+/g, "-") === birdName
-    ) || realBirdData.find(
-      (bird) => bird.common_name?.toLowerCase().replace(/\s+/g, "-") === birdName
-    );
+  // Handle legacy bird name route
+  useEffect(() => {
+    if (birdName) {
+      const handleLegacyRoute = async () => {
+        try {
+          // Try to find bird by common name first
+          let selectedBird;
 
-    if (!selectedBird) {
-      return (
-        <div className="container mx-auto mt-16 px-4 text-center min-h-screen flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <div className="text-8xl mb-6">🐦</div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">
-              Burung Tidak Ditemukan
-            </h1>
-            <p className="text-text-secondary mb-8">
-              Maaf, burung yang Anda cari tidak ada dalam database kami.
-            </p>
-            <motion.button
-              onClick={() => navigate("/birdpedia")}
-              className="bg-brand-sage text-white px-8 py-4 rounded-2xl font-semibold shadow-lg hover:bg-brand-forest hover:shadow-xl transition-all duration-300"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <i className="fas fa-arrow-left mr-2" />
-              Kembali ke Birdpedia
-            </motion.button>
-          </motion.div>
-        </div>
-      );
+          if (useApiData && !hasApiError) {
+            try {
+              // Try API search by name
+              const decodedName = decodeURIComponent(birdName).replace(/-/g, ' ');
+              selectedBird = await BirdService.getBirdByCommonName(decodedName);
+            } catch (apiError) {
+              console.log('API search failed, trying local data');
+            }
+          }
+
+          // Fallback to local data
+          if (!selectedBird) {
+            selectedBird = realBirdData.find(
+              (bird) => bird.common_name?.toLowerCase().replace(/\s+/g, "-") === birdName
+            );
+          }
+
+          if (selectedBird && selectedBird.id) {
+            // Redirect to new detail page route with proper ID
+            navigate(`/birdpedia/${selectedBird.id}`, { replace: true });
+          } else {
+            // Bird not found, redirect to main birdpedia with error
+            toast.error('Burung tidak ditemukan');
+            navigate('/birdpedia', { replace: true });
+          }
+        } catch (error) {
+          console.error('Error handling legacy route:', error);
+          navigate('/birdpedia', { replace: true });
+        }
+      };
+
+      handleLegacyRoute();
     }
+  }, [birdName, navigate, useApiData, hasApiError]);
 
-    // Redirect to new detail page route
-    navigate(`/birdpedia/${selectedBird.id}`);
-    return null;
+  // Don't render main content if handling legacy route
+  if (birdName) {
+    return (
+      <div className="min-h-screen bg-ui-bg flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-sage"></div>
+          <p className="text-text-secondary mt-4">Mengalihkan...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -172,7 +217,12 @@ const BirdpediaSection = () => {
                 <span>Use API Data</span>
               </label>
               <span className="text-xs opacity-75">
-                {useApiData ? 'Loading from server' : 'Using local data'}
+                {useApiData && !hasApiError
+                  ? 'Loading from server'
+                  : hasApiError
+                    ? 'API failed - using local data'
+                    : 'Using local data'
+                }
               </span>
             </div>
           </motion.div>
@@ -221,6 +271,21 @@ const BirdpediaSection = () => {
               </select>
             </div>
 
+            {/* Clear Filters Button */}
+            {(searchTerm || habitatFilter) && (
+              <motion.button
+                onClick={() => {
+                  setSearchTerm("");
+                  setHabitatFilter("");
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Clear
+              </motion.button>
+            )}
+
             {/* Refresh Button */}
             {useApiData && (
               <motion.button
@@ -238,11 +303,25 @@ const BirdpediaSection = () => {
           {/* Results Count */}
           <div className="mt-4 text-sm text-text-secondary">
             Menampilkan {filteredBirds.length} dari {birds.length} burung
-            {useApiData && !isLoading && (
+            {useApiData && !isLoading && !hasApiError && (
               <span className="ml-2 text-brand-sage">• Live data</span>
+            )}
+            {hasApiError && (
+              <span className="ml-2 text-orange-600">• Fallback to local data</span>
             )}
           </div>
         </motion.div>
+
+        {/* Debug Info (remove in production) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-4 p-2 bg-yellow-100 text-yellow-800 text-xs rounded">
+            Debug: {filteredBirds.length} birds loaded,
+            API: {useApiData ? 'ON' : 'OFF'},
+            Error: {hasApiError ? 'YES' : 'NO'},
+            Search: "{searchTerm}",
+            Filter: "{habitatFilter}"
+          </div>
+        )}
 
         {/* Birds Grid */}
         {isLoading ? (
@@ -260,11 +339,22 @@ const BirdpediaSection = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredBirds.map((bird, index) => (
                   <motion.div
-                    key={bird.id || index}
+                    key={`${bird.id}-${index}`} // More robust key
                     variants={itemVariants}
                     className="mb-6"
                   >
-                    <EnhancedBirdCard bird={bird} index={index} />
+                    <EnhancedBirdCard
+                      bird={bird}
+                      index={index}
+                      // Pass explicit ID to ensure correct routing
+                      onClick={() => {
+                        if (bird.id) {
+                          navigate(`/birdpedia/${bird.id}`);
+                        } else {
+                          toast.error('ID burung tidak valid');
+                        }
+                      }}
+                    />
                   </motion.div>
                 ))}
               </div>
@@ -279,7 +369,7 @@ const BirdpediaSection = () => {
                   Tidak ada burung ditemukan
                 </h3>
                 <p className="text-text-secondary">
-                  {useApiData
+                  {useApiData && !hasApiError
                     ? "Coba ubah kata kunci pencarian atau filter habitat"
                     : "Coba ubah kata kunci pencarian atau aktifkan API data"
                   }

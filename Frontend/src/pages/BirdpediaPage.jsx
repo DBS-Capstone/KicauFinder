@@ -34,15 +34,15 @@ const BirdpediaPage = () => {
   // Filter birds based on search and habitat
   const filteredBirds = React.useMemo(() => {
     if (!birds) return [];
-    
+
     return birds.filter(bird => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         bird.common_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         bird.scientific_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesHabitat = !habitatFilter || 
+
+      const matchesHabitat = !habitatFilter ||
         bird.habitat?.toLowerCase().includes(habitatFilter.toLowerCase());
-      
+
       return matchesSearch && matchesHabitat;
     });
   }, [birds, searchTerm, habitatFilter]);
